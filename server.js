@@ -55,6 +55,9 @@ app.ws("/connection", (ws, req) => {
     { role: "user", content: CONFIG.greetings_prompt },
   ];
 
+  // flag to prevent multiple inflight requests to Twilio
+  let isProcessing = false;
+
   // Set up services
   const transcriptionService = new TranscriptionService();
   const ttsService = new TextToSpeechService({});
@@ -68,11 +71,13 @@ app.ws("/connection", (ws, req) => {
       streamSid = msg.start.streamSid;
       callSid = msg.start.callSid;
       console.log(`Starting Media Stream for ${streamSid} on call ${callSid}`);
+      
       // Generate, store, and say a greetings message
+      isProcessing = true;
       const chatCompletion = await chat(messages);
       messages.push(chatCompletion);
       ttsService.generate(chatCompletion.content);
-    
+
     // If its a media event, meaning audio has been sent...
     } else if (msg.event === "media") {
       // Send the audio to be played on the stream
@@ -97,6 +102,8 @@ app.ws("/connection", (ws, req) => {
         messages.push({role: "user", content: CONFIG.goodbye_prompt});
         const chatCompletion = await chat(messages);
         ttsService.generate(chatCompletion.content);
+      } else {
+        isProcessing = false;
       }
     }
   });
@@ -104,13 +111,20 @@ app.ws("/connection", (ws, req) => {
   // When the transcription service receives a transcription of the audio
   transcriptionService.on("transcription", async (text) => {
     console.log(`Received transcription: ${text}`);
-    // Add user message to the message stack & increment counter
-    messages.push({ role: "user", content: text });
-    userChatCount++;
-    // Generate response, add to message stack, and say it
-    const chatCompletion = await chat(messages);
-    messages.push(chatCompletion);
-    ttsService.generate(chatCompletion.content);   
+    if (!isProcessing) {
+      // Add user message to the message stack & increment counter
+      messages.push({ role: "user", content: text });
+      userChatCount++;
+
+      isProcessing = true;
+      
+      // Generate response, add to message stack, and say it
+      const chatCompletion = await chat(messages);
+      messages.push(chatCompletion);
+      ttsService.generate(chatCompletion.content);   
+    } else {
+      console.log("Dropping transcription because isProcessing = true", text);
+    }
   });
 
   // When the tts service has generated audio
@@ -142,7 +156,7 @@ app.ws("/connection", (ws, req) => {
 async function chat(messages) {
   const chatCompletion = await openai.chat.completions.create({
     messages: messages,
-    model: "gpt-3.5-turbo",
+    model: "gpt-3.5-turbo-1106",
   });
   return chatCompletion.choices[0].message;
 }

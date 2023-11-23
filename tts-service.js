@@ -12,7 +12,7 @@ class TextToSpeechService extends EventEmitter {
   async generate(text) {
     const outputFormat = "pcm_16000";
     const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${this.config.voiceId}/stream?output_format=${outputFormat}`,
+      `https://api.elevenlabs.io/v1/text-to-speech/${this.config.voiceId}/stream?optimize_streaming_latency=3&output_format=${outputFormat}`,
       {
         method: "POST",
         headers: {

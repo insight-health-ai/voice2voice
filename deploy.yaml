@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: voice2voice
+  labels:
+    app: voice2voice
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: voice2voice
+  template:
+    metadata:
+      labels:
+        app: voice2voice
+    spec:
+      nodeSelector:
+        kubernetes.io/arch: arm64
+      containers:
+      - name: voice2voice
+        image: 371268448217.dkr.ecr.us-west-2.amazonaws.com/voice2voice:latest
+        ports:
+        - containerPort: 3000
+        imagePullPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: voice2voice-service
+spec:
+  selector:
+    app: voice2voice
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 3000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: voice2voice-ingress
+  annotations:
+    kubernetes.io/ingress.class: "alb"
+    alb.ingress.kubernetes.io/scheme: "internet-facing"
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/subnets: subnet-0c03a0420579a8a77,subnet-0dc5ecd2a400ac3b6
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-west-2:371268448217:certificate/ac46910a-8d02-4b0e-8f77-9a306d9570fb
+  labels:
+    app: voice2voice
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: voice2voice-service
+            port:
+              number: 80
